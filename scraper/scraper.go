@@ -48,6 +48,10 @@ func (s *Scraper) GetDetail(bookURL string) (*models.BookDetail, error) {
 		return nil, fmt.Errorf("empty book URL")
 	}
 
+	if strings.Contains(bookURL, "panelNo=2") || strings.Contains(bookURL, "display_slPanel") {
+		return nil, fmt.Errorf("details for online publications are not yet supported")
+	}
+
 	resp, err := http.Get(bookURL)
 	if err != nil {
 		return nil, err

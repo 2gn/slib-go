@@ -1,0 +1,2 @@
+Error: unknown flag: --enable-all
+The command is terminated due to an error: unknown flag: --enable-all
