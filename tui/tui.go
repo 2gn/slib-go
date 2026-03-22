@@ -259,50 +259,43 @@ func (m model) View() string {
 		s += "\nLoading book details...\n"
 	case m.detail != nil:
 		d := m.detail
-		
-		// Details Table
-		detailRows := [][]string{
-			{"Title", d.Title},
-			{"Author", d.Author},
-			{"Publication", d.Publication},
-			{"ISBN", d.ISBN},
-			{"Format", d.Format},
+
+		// Combined Table
+		rows := [][]string{
+			{"Title", d.Title, ""},
+			{"Author", d.Author, ""},
+			{"Publication", d.Publication, ""},
+			{"ISBN", d.ISBN, ""},
+			{"Format", d.Format, ""},
 		}
 		if d.GoogleBooksURL != "" {
-			detailRows = append(detailRows, []string{"Google Books", d.GoogleBooksURL})
+			rows = append(rows, []string{"Google Books", d.GoogleBooksURL, ""})
 		}
 
-		dt := lTable.New().
-			Border(lipgloss.NormalBorder()).
-			BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
-			Rows(detailRows...)
-
-		details := dt.Render()
-
-		if m.image != "" {
-			s += "\n" + lipgloss.JoinHorizontal(lipgloss.Top, m.image, "  ", details) + "\n"
-		} else {
-			s += "\n" + details + "\n"
-		}
-
-		// Holdings Table
 		if len(d.Holdings) > 0 {
-			holdingRows := [][]string{}
+			// Add a separator/header row for holdings
+			rows = append(rows, []string{"---", "---", "---"})
+			rows = append(rows, []string{"Location", "Call No", "Status"})
 			for _, h := range d.Holdings {
-				holdingRows = append(holdingRows, []string{
+				rows = append(rows, []string{
 					h.Location,
 					h.CallNo,
 					m.colorizeStatus(h.Status),
 				})
 			}
+		}
 
-			ht := lTable.New().
-				Border(lipgloss.NormalBorder()).
-				BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
-				Headers("Location", "Call No", "Status").
-				Rows(holdingRows...)
+		t := lTable.New().
+			Border(lipgloss.NormalBorder()).
+			BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
+			Rows(rows...)
 
-			s += "\n" + ht.Render() + "\n"
+		tableRendered := t.Render()
+
+		if m.image != "" {
+			s += "\n" + lipgloss.JoinHorizontal(lipgloss.Top, m.image, "  ", tableRendered) + "\n"
+		} else {
+			s += "\n" + tableRendered + "\n"
 		}
 	case len(m.books) > 0 && !m.searching:
 		curr := m.table.Cursor()
