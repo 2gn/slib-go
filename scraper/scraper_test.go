@@ -35,6 +35,7 @@ func TestScrape(t *testing.T) {
 			}
 			// Note: GoogleBooksURL might be empty for some books
 			t.Logf("Found Google Books URL: %s", detail.GoogleBooksURL)
+			t.Logf("Found Image URL: %s", detail.ImageURL)
 		}
 	}
 }

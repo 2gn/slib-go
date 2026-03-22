@@ -59,8 +59,9 @@ func (s *Scraper) GetDetail(bookURL string) (*models.BookDetail, error) {
 	detail := &models.BookDetail{}
 	detail.Title = s.normalizeSpace(doc.Find(".mainBox h3").First().Text())
 
-	// Scrape Google Books URL from bib page
+	// Scrape Google Books URL and Image from bib page
 	detail.GoogleBooksURL, _ = doc.Find("#xc-search-full-left > a:nth-child(2)").Attr("href")
+	detail.ImageURL, _ = doc.Find("#xc-search-full-left img").Attr("src")
 
 	doc.Find(".mainTable dt").Each(func(i int, sel *goquery.Selection) {
 		label := strings.TrimSpace(sel.Text())

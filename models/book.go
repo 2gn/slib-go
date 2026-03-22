@@ -18,6 +18,7 @@ type BookDetail struct {
 	ISBN           string    `json:"isbn"`
 	BibID          string    `json:"bib_id"`
 	GoogleBooksURL string    `json:"google_books_url"`
+	ImageURL       string    `json:"image_url"`
 	Holdings       []Holding `json:"holdings"`
 }
 

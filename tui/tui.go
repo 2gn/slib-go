@@ -2,6 +2,10 @@ package tui
 
 import (
 	"fmt"
+	"image"
+	_ "image/jpeg"
+	_ "image/png"
+	"net/http"
 
 	"github.com/2gn/slib-go/models"
 	"github.com/2gn/slib-go/scraper"
@@ -9,6 +13,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/qeesung/image2ascii/convert"
 )
 
 var baseStyle = lipgloss.NewStyle().
@@ -24,6 +29,7 @@ type model struct {
 	err           error
 	searching     bool
 	loadingDetail bool
+	image         string
 }
 
 func NewModel(s *scraper.Scraper) model {
@@ -78,6 +84,10 @@ type detailMsg struct {
 	err    error
 }
 
+type imageMsg struct {
+	image string
+}
+
 func (m model) updateSearch(query string) tea.Cmd {
 	return func() tea.Msg {
 		books, err := m.scraper.ScrapeAll(query)
@@ -89,6 +99,29 @@ func (m model) fetchDetail(url string) tea.Cmd {
 	return func() tea.Msg {
 		detail, err := m.scraper.GetDetail(url)
 		return detailMsg{detail: detail, err: err}
+	}
+}
+
+func (m model) fetchImage(url string) tea.Cmd {
+	return func() tea.Msg {
+		resp, err := http.Get(url)
+		if err != nil {
+			return imageMsg{image: ""}
+		}
+		defer func() { _ = resp.Body.Close() }()
+
+		img, _, err := image.Decode(resp.Body)
+		if err != nil {
+			return imageMsg{image: ""}
+		}
+
+		converter := convert.NewImageConverter()
+		options := convert.DefaultOptions
+		options.Ratio = 0.2
+		options.FixedWidth = 40
+		options.FixedHeight = 20
+		ascii := converter.Image2ASCIIString(img, &options)
+		return imageMsg{image: ascii}
 	}
 }
 
@@ -131,6 +164,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if book.URL != "" {
 						m.loadingDetail = true
 						m.detail = nil
+						m.image = ""
 						return m, m.fetchDetail(book.URL)
 					}
 				}
@@ -163,6 +197,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.detail = msg.detail
+		if m.detail.ImageURL != "" {
+			return m, m.fetchImage(m.detail.ImageURL)
+		}
+		return m, nil
+
+	case imageMsg:
+		m.image = msg.image
 		return m, nil
 	}
 
@@ -199,6 +240,10 @@ func (m model) View() string {
 
 		if d.GoogleBooksURL != "" {
 			detailText += fmt.Sprintf("Google Books: %s\n", d.GoogleBooksURL)
+		}
+
+		if m.image != "" {
+			s += "\n" + m.image + "\n"
 		}
 
 		s += lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render(detailText)
