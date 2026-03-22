@@ -59,6 +59,9 @@ func (s *Scraper) GetDetail(bookURL string) (*models.BookDetail, error) {
 	detail := &models.BookDetail{}
 	detail.Title = s.normalizeSpace(doc.Find(".mainBox h3").First().Text())
 
+	// Scrape Google Books URL from bib page
+	detail.GoogleBooksURL, _ = doc.Find("#xc-search-full-left > a:nth-child(2)").Attr("href")
+
 	doc.Find(".mainTable dt").Each(func(i int, sel *goquery.Selection) {
 		label := strings.TrimSpace(sel.Text())
 		value := s.normalizeSpace(sel.Next().Text())
@@ -85,22 +88,21 @@ func (s *Scraper) GetDetail(bookURL string) (*models.BookDetail, error) {
 
 	// Fetch holdings via simplified AJAX
 	if detail.BibID != "" {
-		holdings, googleBooksURL, err := s.fetchHoldings(detail.BibID)
+		holdings, err := s.fetchHoldings(detail.BibID)
 		if err == nil {
 			detail.Holdings = holdings
-			detail.GoogleBooksURL = googleBooksURL
 		}
 	}
 
 	return detail, nil
 }
 
-func (s *Scraper) fetchHoldings(bibID string) ([]models.Holding, string, error) {
+func (s *Scraper) fetchHoldings(bibID string) ([]models.Holding, error) {
 	ajaxURL := fmt.Sprintf("https://library.shibaura-it.ac.jp/opc/xc_search/ajax/ncip_info_full?provider_id=1&bib_ids=%s", bibID)
 
 	resp, err := http.Get(ajaxURL)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -108,16 +110,13 @@ func (s *Scraper) fetchHoldings(bibID string) ([]models.Holding, string, error) 
 		Content string `json:"content"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&jsonResp); err != nil {
-		return nil, "", err
+		return nil, err
 	}
 
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(jsonResp.Content))
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
-
-	var googleBooksURL string
-	googleBooksURL, _ = doc.Find("#xc-search-full-left > a:nth-child(2)").Attr("href")
 
 	var holdings []models.Holding
 	doc.Find("tbody tr").Each(func(_ int, sel *goquery.Selection) {
@@ -140,7 +139,7 @@ func (s *Scraper) fetchHoldings(bibID string) ([]models.Holding, string, error) 
 		}
 	})
 
-	return holdings, googleBooksURL, nil
+	return holdings, nil
 }
 
 // ScrapeAll fetches both library and online publications concurrently.
