@@ -24,7 +24,8 @@ func ColorizeStatus(status string) string {
 }
 
 // RenderDetailTable returns a rendered string of two separate tables: book details and holdings.
-func RenderDetailTable(d *models.BookDetail) string {
+// It tries to display them in a row if maxWidth allows, otherwise vertically.
+func RenderDetailTable(d *models.BookDetail, maxWidth int) string {
 	// Details Table
 	detailRows := [][]string{
 		{"Title", d.Title},
@@ -42,7 +43,7 @@ func RenderDetailTable(d *models.BookDetail) string {
 		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
 		Rows(detailRows...)
 
-	res := dt.Render()
+	detailsRendered := dt.Render()
 
 	// Holdings Table
 	if len(d.Holdings) > 0 {
@@ -73,8 +74,22 @@ func RenderDetailTable(d *models.BookDetail) string {
 			Headers(headers...).
 			Rows(callNoRow, statusRow)
 
-		res = lipgloss.JoinVertical(lipgloss.Left, res, "\n"+ht.Render())
+		holdingsRendered := ht.Render()
+
+		// Check if they fit in a row
+		detailsWidth := lipgloss.Width(detailsRendered)
+		holdingsWidth := lipgloss.Width(holdingsRendered)
+
+		// If maxWidth is 0 (CLI mode with no terminal info or not specified), 
+
+		// we can default to vertical or some large value.
+		// For now, let's assume if maxWidth > 0, we check.
+		if maxWidth > 0 && detailsWidth+holdingsWidth+4 <= maxWidth {
+			return lipgloss.JoinHorizontal(lipgloss.Top, detailsRendered, "    ", holdingsRendered)
+		}
+
+		return lipgloss.JoinVertical(lipgloss.Left, detailsRendered, "\n"+holdingsRendered)
 	}
 
-	return res
+	return detailsRendered
 }

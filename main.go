@@ -13,6 +13,7 @@ import (
 	"github.com/2gn/slib-go/scraper"
 	"github.com/2gn/slib-go/tui"
 	"github.com/2gn/slib-go/ui"
+	"golang.org/x/term"
 )
 
 func main() {
@@ -63,7 +64,12 @@ func main() {
 			return
 		}
 
-		fmt.Println(ui.RenderDetailTable(detail))
+		width, _, err := term.GetSize(int(os.Stdout.Fd()))
+		if err != nil {
+			width = 80 // fallback
+		}
+
+		fmt.Println(ui.RenderDetailTable(detail, width))
 		return
 	}
 

@@ -34,6 +34,8 @@ type model struct {
 	searching     bool
 	loadingDetail bool
 	image         string
+	width         int
+	height        int
 }
 
 // NewModel creates and returns a new TUI model.
@@ -139,6 +141,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		m.table.SetWidth(msg.Width)
+		return m, nil
+
 	case spinner.TickMsg:
 		var sCmd tea.Cmd
 		m.spinner, sCmd = m.spinner.Update(msg)
@@ -256,7 +264,13 @@ func (m model) View() string {
 	case m.loadingDetail:
 		s += "\n" + m.spinner.View() + " Loading book details...\n"
 	case m.detail != nil:
-		tableRendered := ui.RenderDetailTable(m.detail)
+		// Calculate available width for tables after image
+		availableWidth := m.width
+		if m.image != "" {
+			availableWidth -= lipgloss.Width(m.image) + 2 // 2 for spacing
+		}
+
+		tableRendered := ui.RenderDetailTable(m.detail, availableWidth)
 
 		if m.image != "" {
 			s += "\n" + lipgloss.JoinHorizontal(lipgloss.Top, m.image, "  ", tableRendered) + "\n"
