@@ -104,7 +104,7 @@ func (m model) fetchDetail(url string) tea.Cmd {
 	}
 }
 
-func (m model) fetchImage(url string) tea.Cmd {
+func (m model) fetchImage(url string, height int) tea.Cmd {
 	return func() tea.Msg {
 		resp, err := http.Get(url)
 		if err != nil {
@@ -120,8 +120,8 @@ func (m model) fetchImage(url string) tea.Cmd {
 		converter := convert.NewImageConverter()
 		options := convert.DefaultOptions
 		options.Ratio = 0.2
-		options.FixedWidth = 40
-		options.FixedHeight = 20
+		options.FixedHeight = height
+		options.FixedWidth = height * 2 // Roughly maintain aspect ratio in terminal (2x taller than wide characters)
 		ascii := converter.Image2ASCIIString(img, &options)
 		return imageMsg{image: ascii}
 	}
@@ -200,7 +200,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.detail = msg.detail
 		if m.detail.ImageURL != "" {
-			return m, m.fetchImage(m.detail.ImageURL)
+			// Calculate detail height: 6 (base) + 1 (GoogleBooks)
+			height := 6
+			if m.detail.GoogleBooksURL != "" {
+				height++
+			}
+			return m, m.fetchImage(m.detail.ImageURL, height)
 		}
 		return m, nil
 
