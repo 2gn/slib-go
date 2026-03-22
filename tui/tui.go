@@ -287,8 +287,6 @@ func (m model) View() string {
 
 		// Holdings Table
 		if len(d.Holdings) > 0 {
-			s += lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Bold(true).Render("\n--- Holdings ---\n")
-			
 			holdingRows := [][]string{}
 			for _, h := range d.Holdings {
 				holdingRows = append(holdingRows, []string{
@@ -304,7 +302,7 @@ func (m model) View() string {
 				Headers("Location", "Call No", "Status").
 				Rows(holdingRows...)
 
-			s += ht.Render() + "\n"
+			s += "\n" + ht.Render() + "\n"
 		}
 	case len(m.books) > 0 && !m.searching:
 		curr := m.table.Cursor()
