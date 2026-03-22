@@ -23,66 +23,58 @@ func ColorizeStatus(status string) string {
 	}
 }
 
-// RenderDetailTable returns a rendered string of a transposed table containing book details and holdings.
+// RenderDetailTable returns a rendered string of two separate tables: book details and holdings.
 func RenderDetailTable(d *models.BookDetail) string {
-	// Combined Transposed Table
-	numCols := 1 + len(d.Holdings)
-	if numCols < 2 {
-		numCols = 2 // At least Labels + Data
+	// Details Table
+	detailRows := [][]string{
+		{"Title", d.Title},
+		{"Author", d.Author},
+		{"Publication", d.Publication},
+		{"ISBN", d.ISBN},
+		{"Format", d.Format},
 	}
-
-	// Field labels
-	fields := []string{"Title", "Author", "Publication", "ISBN", "Format"}
 	if d.GoogleBooksURL != "" {
-		fields = append(fields, "Google Books")
+		detailRows = append(detailRows, []string{"Google Books", d.GoogleBooksURL})
 	}
 
-	rows := [][]string{}
-	// General Detail rows
-	for _, f := range fields {
-		row := make([]string, numCols)
-		row[0] = f
-		switch f {
-		case "Title":
-			row[1] = d.Title
-		case "Author":
-			row[1] = d.Author
-		case "Publication":
-			row[1] = d.Publication
-		case "ISBN":
-			row[1] = d.ISBN
-		case "Format":
-			row[1] = d.Format
-		case "Google Books":
-			row[1] = d.GoogleBooksURL
-		}
-		rows = append(rows, row)
-	}
-
-	// Transposed Holdings rows
-	if len(d.Holdings) > 0 {
-		holdingFields := []string{"Location", "Call No", "Status"}
-		for _, f := range holdingFields {
-			row := make([]string, numCols)
-			row[0] = f
-			for i, h := range d.Holdings {
-				switch f {
-				case "Location":
-					row[i+1] = h.Location
-				case "Call No":
-					row[i+1] = h.CallNo
-				case "Status":
-					row[i+1] = ColorizeStatus(h.Status)
-				}
-			}
-			rows = append(rows, row)
-		}
-	}
-
-	t := lTable.New().
+	dt := lTable.New().
 		Border(lipgloss.NormalBorder()).
 		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
-		Rows(rows...)
+		Rows(detailRows...)
 
-	return t.Render()
+	res := dt.Render()
+
+	// Holdings Table
+	if len(d.Holdings) > 0 {
+		// Horizontal header: Campus name (Location)
+		headers := make([]string, len(d.Holdings)+1)
+		headers[0] = ""
+		for i, h := range d.Holdings {
+			headers[i+1] = h.Location
+		}
+
+		// Row 1: Call No
+		callNoRow := make([]string, len(d.Holdings)+1)
+		callNoRow[0] = "Call No"
+		for i, h := range d.Holdings {
+			callNoRow[i+1] = h.CallNo
+		}
+
+		// Row 2: Status
+		statusRow := make([]string, len(d.Holdings)+1)
+		statusRow[0] = "Availability"
+		for i, h := range d.Holdings {
+			statusRow[i+1] = ColorizeStatus(h.Status)
+		}
+
+		ht := lTable.New().
+			Border(lipgloss.NormalBorder()).
+			BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
+			Headers(headers...).
+			Rows(callNoRow, statusRow)
+
+		res = lipgloss.JoinVertical(lipgloss.Left, res, "\n"+ht.Render())
+	}
+
+	return res
 }
