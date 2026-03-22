@@ -7,6 +7,7 @@ import (
 	_ "image/jpeg" // Register JPEG format
 	_ "image/png"  // Register PNG format
 	"net/http"
+	"strings"
 
 	"github.com/2gn/slib-go/models"
 	"github.com/2gn/slib-go/scraper"
@@ -14,6 +15,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	lTable "github.com/charmbracelet/lipgloss/table"
 	"github.com/qeesung/image2ascii/convert"
 )
 
@@ -224,6 +226,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tCmd
 }
 
+func (m model) colorizeStatus(status string) string {
+	switch {
+	case strings.Contains(status, "貸出中"): // On Loan
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("204")).Render("🕒 " + status)
+	case strings.Contains(status, "利用可能"), strings.Contains(status, "在架"): // Available / On Shelf
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Render("✅ " + status)
+	case strings.Contains(status, "予約中"): // Reserved
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render("🔖 " + status)
+	default:
+		return status
+	}
+}
+
 func (m model) View() string {
 	s := "SIT Search TUI\n\n"
 	s += m.textInput.View() + "\n\n"
@@ -244,14 +259,25 @@ func (m model) View() string {
 		s += "\nLoading book details...\n"
 	case m.detail != nil:
 		d := m.detail
-		detailText := fmt.Sprintf("--- Details ---\nTitle: %s\nAuthor: %s\nPublication: %s\nISBN: %s\nFormat: %s\n",
-			d.Title, d.Author, d.Publication, d.ISBN, d.Format)
-
+		
+		// Details Table
+		detailRows := [][]string{
+			{"Title", d.Title},
+			{"Author", d.Author},
+			{"Publication", d.Publication},
+			{"ISBN", d.ISBN},
+			{"Format", d.Format},
+		}
 		if d.GoogleBooksURL != "" {
-			detailText += fmt.Sprintf("Google Books: %s\n", d.GoogleBooksURL)
+			detailRows = append(detailRows, []string{"Google Books", d.GoogleBooksURL})
 		}
 
-		details := lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render(detailText)
+		dt := lTable.New().
+			Border(lipgloss.NormalBorder()).
+			BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
+			Rows(detailRows...)
+
+		details := dt.Render()
 
 		if m.image != "" {
 			s += "\n" + lipgloss.JoinHorizontal(lipgloss.Top, m.image, "  ", details) + "\n"
@@ -259,12 +285,26 @@ func (m model) View() string {
 			s += "\n" + details + "\n"
 		}
 
+		// Holdings Table
 		if len(d.Holdings) > 0 {
-			s += lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render("\n--- Holdings ---\n")
+			s += lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Bold(true).Render("\n--- Holdings ---\n")
+			
+			holdingRows := [][]string{}
 			for _, h := range d.Holdings {
-				s += lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render(
-					fmt.Sprintf("%s | %s | %s\n", h.Location, h.CallNo, h.Status))
+				holdingRows = append(holdingRows, []string{
+					h.Location,
+					h.CallNo,
+					m.colorizeStatus(h.Status),
+				})
 			}
+
+			ht := lTable.New().
+				Border(lipgloss.NormalBorder()).
+				BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
+				Headers("Location", "Call No", "Status").
+				Rows(holdingRows...)
+
+			s += ht.Render() + "\n"
 		}
 	case len(m.books) > 0 && !m.searching:
 		curr := m.table.Cursor()
