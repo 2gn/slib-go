@@ -11,6 +11,7 @@ import (
 	"github.com/2gn/slib-go/models"
 	"github.com/2gn/slib-go/scraper"
 	"github.com/2gn/slib-go/ui"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -25,6 +26,7 @@ var baseStyle = lipgloss.NewStyle().
 type model struct {
 	textInput     textinput.Model
 	table         table.Model
+	spinner       spinner.Model
 	scraper       *scraper.Scraper
 	books         []models.Book
 	detail        *models.BookDetail
@@ -66,15 +68,20 @@ func NewModel(s *scraper.Scraper) tea.Model {
 		Bold(false)
 	t.SetStyles(sTable)
 
+	sp := spinner.New()
+	sp.Spinner = spinner.Dot
+	sp.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
+
 	return model{
 		textInput: ti,
 		table:     t,
+		spinner:   sp,
 		scraper:   s,
 	}
 }
 
 func (m model) Init() tea.Cmd {
-	return textinput.Blink
+	return tea.Batch(textinput.Blink, m.spinner.Tick)
 }
 
 type searchMsg struct {
@@ -132,6 +139,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+	case spinner.TickMsg:
+		var sCmd tea.Cmd
+		m.spinner, sCmd = m.spinner.Update(msg)
+		return m, sCmd
+
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "ctrl+c", "q", "esc":
@@ -231,7 +243,7 @@ func (m model) View() string {
 
 	switch {
 	case m.searching:
-		s += "Searching...\n"
+		s += m.spinner.View() + " Searching...\n"
 	case m.err != nil:
 		s += fmt.Sprintf("Error: %v\n", m.err)
 	default:
@@ -242,7 +254,7 @@ func (m model) View() string {
 
 	switch {
 	case m.loadingDetail:
-		s += "\nLoading book details...\n"
+		s += "\n" + m.spinner.View() + " Loading book details...\n"
 	case m.detail != nil:
 		tableRendered := ui.RenderDetailTable(m.detail)
 
