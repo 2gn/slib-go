@@ -12,6 +12,8 @@ import (
 	"github.com/2gn/slib-go/models"
 	"github.com/2gn/slib-go/scraper"
 	"github.com/2gn/slib-go/tui"
+	"github.com/charmbracelet/lipgloss"
+	lTable "github.com/charmbracelet/lipgloss/table"
 )
 
 func main() {
@@ -62,20 +64,42 @@ func main() {
 			return
 		}
 
-		fmt.Printf("--- Details ---\n")
-		fmt.Printf("Title:       %s\n", detail.Title)
-		fmt.Printf("Author:      %s\n", detail.Author)
-		fmt.Printf("Publication: %s\n", detail.Publication)
-		fmt.Printf("Format:      %s\n", detail.Format)
-		fmt.Printf("ISBN:        %s\n", detail.ISBN)
-		fmt.Printf("Bib ID:      %s\n", detail.BibID)
-		if detail.GoogleBooksURL != "" {
-			fmt.Printf("Google Books: %s\n", detail.GoogleBooksURL)
+		rows := [][]string{
+			{"Title", detail.Title},
+			{"Author", detail.Author},
+			{"Publication", detail.Publication},
+			{"Format", detail.Format},
+			{"ISBN", detail.ISBN},
+			{"Bib ID", detail.BibID},
 		}
-		fmt.Printf("\n--- Holdings ---\n")
+		if detail.GoogleBooksURL != "" {
+			rows = append(rows, []string{"Google Books", detail.GoogleBooksURL})
+		}
 
-		for _, h := range detail.Holdings {
-			fmt.Printf("%-20s | %-15s | %s\n", h.Location, h.CallNo, h.Status)
+		dt := lTable.New().
+			Border(lipgloss.NormalBorder()).
+			BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
+			Rows(rows...)
+
+		fmt.Println(dt.Render())
+
+		if len(detail.Holdings) > 0 {
+			holdingRows := [][]string{}
+			for _, h := range detail.Holdings {
+				holdingRows = append(holdingRows, []string{
+					h.Location,
+					h.CallNo,
+					colorizeStatus(h.Status),
+				})
+			}
+
+			ht := lTable.New().
+				Border(lipgloss.NormalBorder()).
+				BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
+				Headers("Location", "Call No", "Status").
+				Rows(holdingRows...)
+
+			fmt.Println(ht.Render())
 		}
 		return
 	}
@@ -163,4 +187,17 @@ func isAnyFlagPresent() bool {
 		present = true
 	})
 	return present
+}
+
+func colorizeStatus(status string) string {
+	switch {
+	case strings.Contains(status, "貸出中"): // On Loan
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("204")).Render("🕒 " + status)
+	case strings.Contains(status, "利用可能"), strings.Contains(status, "在架"): // Available / On Shelf
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Render("✅ " + status)
+	case strings.Contains(status, "予約中"): // Reserved
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render("🔖 " + status)
+	default:
+		return status
+	}
 }
