@@ -10,6 +10,7 @@ import (
 
 	"github.com/2gn/slib-go/models"
 	"github.com/2gn/slib-go/scraper"
+	"github.com/2gn/slib-go/tui"
 )
 
 func main() {
@@ -17,19 +18,22 @@ func main() {
 	toyosu := flag.Bool("toyosu", false, "Filter by Toyosu campus")
 	omiya := flag.Bool("omiya", false, "Filter by Omiya campus")
 	jsonOutput := flag.Bool("json", false, "Output results in JSON format")
+	bookID := flag.String("id", "", "Fetch details for a specific book by ID (e.g., BB16343390)")
 	help := flag.Bool("help", false, "Show help message")
 	flag.BoolVar(help, "h", false, "Show help message")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "SIT Search Scraper\n\n")
 		fmt.Fprintf(os.Stderr, "Usage:\n")
-		fmt.Fprintf(os.Stderr, "  go run main.go [flags] [query]\n\n")
+		fmt.Fprintf(os.Stderr, "  go run main.go [flags] [query]\n")
+		fmt.Fprintf(os.Stderr, "  go run main.go -id [ID]\n")
+		fmt.Fprintf(os.Stderr, "  go run main.go tui\n\n")
 		fmt.Fprintf(os.Stderr, "Flags:\n")
 		flag.PrintDefaults()
 		fmt.Fprintf(os.Stderr, "\nExamples:\n")
-		fmt.Fprintf(os.Stderr, "  go run main.go test\n")
-		fmt.Fprintf(os.Stderr, "  go run main.go -omiya physics\n")
-		fmt.Fprintf(os.Stderr, "  go run main.go -mode library -toyosu \"computer science\"\n")
+		fmt.Fprintf(os.Stderr, "  go run main.go -id BB16343390\n")
+		fmt.Fprintf(os.Stderr, "  go run main.go -mode library physics\n")
+		fmt.Fprintf(os.Stderr, "  go run main.go tui\n")
 	}
 
 	flag.Parse()
@@ -39,21 +43,72 @@ func main() {
 		return
 	}
 
+	s := scraper.NewScraper()
+
+	// Direct ID lookup
+	if *bookID != "" {
+		detail, err := s.GetDetailByID(*bookID)
+		if err != nil {
+			if *jsonOutput {
+				log.Fatalf("{\"error\": \"%v\"}", err)
+			} else {
+				log.Fatalf("Error fetching book details: %v", err)
+			}
+		}
+
+		if *jsonOutput {
+			output, _ := json.MarshalIndent(detail, "", "  ")
+			fmt.Println(string(output))
+			return
+		}
+
+		fmt.Printf("--- Details ---\n")
+		fmt.Printf("Title:       %s\n", detail.Title)
+		fmt.Printf("Author:      %s\n", detail.Author)
+		fmt.Printf("Publication: %s\n", detail.Publication)
+		fmt.Printf("Format:      %s\n", detail.Format)
+		fmt.Printf("ISBN:        %s\n", detail.ISBN)
+		fmt.Printf("Bib ID:      %s\n", detail.BibID)
+		if detail.GoogleBooksURL != "" {
+			fmt.Printf("Google Books: %s\n", detail.GoogleBooksURL)
+		}
+		fmt.Printf("\n--- Holdings ---\n")
+
+		for _, h := range detail.Holdings {
+			fmt.Printf("%-20s | %-15s | %s\n", h.Location, h.CallNo, h.Status)
+		}
+		return
+	}
+
+	// TUI Mode
+	isTui := false
+	if flag.NArg() > 0 && flag.Arg(0) == "tui" {
+		isTui = true
+	} else if flag.NArg() == 0 && !isAnyFlagPresent() {
+		isTui = true
+	}
+
+	if isTui {
+		if err := tui.StartTUI(s); err != nil {
+			log.Fatalf("Error starting TUI: %v", err)
+		}
+		return
+	}
+
+	// Search Mode
+	if *toyosu {
+		s.Campus = "Toyosu"
+	} else if *omiya {
+		s.Campus = "Omiya"
+	}
+
 	if *toyosu && *omiya {
-		log.Fatal("Error: Cannot specify both -toyosu and -omiya. Please choose one campus or none for all campuses.")
+		log.Fatal("Error: Cannot specify both -toyosu and -omiya.")
 	}
 
 	query := "test"
 	if flag.NArg() > 0 {
 		query = strings.Join(flag.Args(), " ")
-	}
-
-	s := scraper.NewScraper()
-	
-	if *toyosu {
-		s.Campus = "Toyosu"
-	} else if *omiya {
-		s.Campus = "Omiya"
 	}
 
 	var books []models.Book
@@ -75,7 +130,7 @@ func main() {
 	case "all":
 		books, err = s.ScrapeAll(query)
 	default:
-		log.Fatalf("Invalid mode: %s. Use 'all', 'library', or 'online'.", *mode)
+		log.Fatalf("Invalid mode: %s.", *mode)
 	}
 
 	if err != nil {
@@ -87,10 +142,7 @@ func main() {
 	}
 
 	if *jsonOutput {
-		output, err := json.MarshalIndent(books, "", "  ")
-		if err != nil {
-			log.Fatalf("{\"error\": \"failed to marshal JSON: %v\"}", err)
-		}
+		output, _ := json.MarshalIndent(books, "", "  ")
 		fmt.Println(string(output))
 		return
 	}
@@ -101,7 +153,15 @@ func main() {
 		if book.IsOnline {
 			location = "Online"
 		}
-		fmt.Printf("%d. [%s] %s\n   Author: %s\n   Material: %s\n   URL: %s\n\n", 
+		fmt.Printf("%d. [%s] %s\n   Author: %s\n   Material: %s\n   URL: %s\n\n",
 			i+1, location, book.Title, book.Author, book.Material, book.URL)
 	}
+}
+
+func isAnyFlagPresent() bool {
+	var present bool
+	flag.Visit(func(f *flag.Flag) {
+		present = true
+	})
+	return present
 }

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/PuerkitoBio/goquery"
 	"github.com/2gn/slib-go/models"
+	"github.com/PuerkitoBio/goquery"
 )
 
 var (
@@ -30,6 +30,119 @@ func NewScraper() *Scraper {
 	}
 }
 
+// GetDetailByID fetches detailed information about a book using its BIB ID.
+func (s *Scraper) GetDetailByID(id string) (*models.BookDetail, error) {
+	if id == "" {
+		return nil, fmt.Errorf("empty book ID")
+	}
+	bookURL := fmt.Sprintf("https://library.shibaura-it.ac.jp/opc//recordID/catalog.bib/%s", id)
+	return s.GetDetail(bookURL)
+}
+
+// GetDetail fetches detailed information about a book.
+func (s *Scraper) GetDetail(bookURL string) (*models.BookDetail, error) {
+	if bookURL == "" {
+		return nil, fmt.Errorf("empty book URL")
+	}
+
+	resp, err := http.Get(bookURL)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	detail := &models.BookDetail{}
+	detail.Title = s.normalizeSpace(doc.Find(".mainBox h3").First().Text())
+
+	doc.Find(".mainTable dt").Each(func(i int, sel *goquery.Selection) {
+		label := strings.TrimSpace(sel.Text())
+		value := s.normalizeSpace(sel.Next().Text())
+
+		switch label {
+		case "フォーマット:":
+			detail.Format = value
+		case "責任表示:", "著者名:":
+			if detail.Author == "" {
+				detail.Author = value
+			}
+		case "言語:":
+			detail.Language = value
+		case "出版情報:":
+			detail.Publication = value
+		case "形態:":
+			detail.PhysicalDesc = value
+		case "ISBN:":
+			detail.ISBN = value
+		case "書誌ID:":
+			detail.BibID = value
+		}
+	})
+
+	// Fetch holdings via simplified AJAX
+	if detail.BibID != "" {
+		holdings, googleBooksURL, err := s.fetchHoldings(detail.BibID)
+		if err == nil {
+			detail.Holdings = holdings
+			detail.GoogleBooksURL = googleBooksURL
+		}
+	}
+
+	return detail, nil
+}
+
+func (s *Scraper) fetchHoldings(bibID string) ([]models.Holding, string, error) {
+	ajaxURL := fmt.Sprintf("https://library.shibaura-it.ac.jp/opc/xc_search/ajax/ncip_info_full?provider_id=1&bib_ids=%s", bibID)
+
+	resp, err := http.Get(ajaxURL)
+	if err != nil {
+		return nil, "", err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	var jsonResp struct {
+		Content string `json:"content"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&jsonResp); err != nil {
+		return nil, "", err
+	}
+
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(jsonResp.Content))
+	if err != nil {
+		return nil, "", err
+	}
+
+	var googleBooksURL string
+	googleBooksURL, _ = doc.Find("#xc-search-full-left > a:nth-child(2)").Attr("href")
+
+	var holdings []models.Holding
+	doc.Find("tbody tr").Each(func(_ int, sel *goquery.Selection) {
+		holding := models.Holding{}
+
+		// Status: .bkAva dd
+		holding.Status = s.normalizeSpace(sel.Find(".bkAva dd").Text())
+
+		// Location: .bkLoc dd
+		holding.Location = s.normalizeSpace(sel.Find(".bkLoc dd").Text())
+
+		// Call No: .bkCnu dd (use spDisInl for cleaner text)
+		holding.CallNo = s.normalizeSpace(sel.Find(".bkCnu dd .spDisInl").Text())
+		if holding.CallNo == "" {
+			holding.CallNo = s.normalizeSpace(sel.Find(".bkCnu dd").Text())
+		}
+
+		if holding.Location != "" {
+			holdings = append(holdings, holding)
+		}
+	})
+
+	return holdings, googleBooksURL, nil
+}
+
 // ScrapeAll fetches both library and online publications concurrently.
 func (s *Scraper) ScrapeAll(query string) ([]models.Book, error) {
 	var wg sync.WaitGroup
@@ -39,7 +152,6 @@ func (s *Scraper) ScrapeAll(query string) ([]models.Book, error) {
 
 	wg.Add(2)
 
-	// Fetch Library Collection
 	go func() {
 		defer wg.Done()
 		books, err := s.Scrape(query)
@@ -52,7 +164,6 @@ func (s *Scraper) ScrapeAll(query string) ([]models.Book, error) {
 		allBooks = append(allBooks, books...)
 	}()
 
-	// Fetch Online Publications
 	go func() {
 		defer wg.Done()
 		books, err := s.ScrapeOnline(query)
@@ -86,13 +197,12 @@ func (s *Scraper) Scrape(query string) ([]models.Book, error) {
 // ScrapeOnline fetches and parses online publications (Panel 2)
 func (s *Scraper) ScrapeOnline(query string) ([]models.Book, error) {
 	url := fmt.Sprintf("%s?searchTarget=0&kw=%s&selectedLngOnly=0&selectSubject=1&panelNo=2", s.OnlineBaseURL, query)
-	// Online publications typically don't have a campus facet, but we keep the structure
-	
+
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch URL: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("bad status code: %d", resp.StatusCode)
@@ -118,7 +228,7 @@ func (s *Scraper) fetchAndParse(url string, isOnline bool) ([]models.Book, error
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch URL: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("bad status code: %d", resp.StatusCode)
@@ -139,18 +249,16 @@ func (s *Scraper) parse(doc *goquery.Document, isOnline bool) []models.Book {
 		book := models.Book{IsOnline: isOnline}
 
 		spanMe3 := selection.Find("span.me-3")
-		
-		// 1. URL and Title from Link
+
 		link := spanMe3.Find("a.link-black")
 		if link.Length() > 0 {
 			book.URL, _ = link.Attr("href")
 			book.Title = s.normalizeSpace(link.Text())
 		}
 
-		// 2. Author and fallback Title
 		content := spanMe3.Clone()
 		content.Find("a").Remove()
-		
+
 		fullText := s.normalizeSpace(content.Text())
 		fullText = numRegex.ReplaceAllString(fullText, "")
 
@@ -161,7 +269,6 @@ func (s *Scraper) parse(doc *goquery.Document, isOnline bool) []models.Book {
 			book.Author = ""
 		}
 
-		// 3. Material
 		book.Material = s.normalizeSpace(selection.Find("span.ms-auto").Text())
 
 		books = append(books, book)
