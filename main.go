@@ -1,3 +1,4 @@
+// Package main provides the entry point for the SIT search scraper CLI and TUI.
 package main
 
 import (
@@ -51,9 +52,8 @@ func main() {
 		if err != nil {
 			if *jsonOutput {
 				log.Fatalf("{\"error\": \"%v\"}", err)
-			} else {
-				log.Fatalf("Error fetching book details: %v", err)
 			}
+			log.Fatalf("Error fetching book details: %v", err)
 		}
 
 		if *jsonOutput {
@@ -136,9 +136,8 @@ func main() {
 	if err != nil {
 		if *jsonOutput {
 			log.Fatalf("{\"error\": \"%v\"}", err)
-		} else {
-			log.Printf("Error during scraping: %v", err)
 		}
+		log.Printf("Error during scraping: %v", err)
 	}
 
 	if *jsonOutput {
@@ -160,7 +159,7 @@ func main() {
 
 func isAnyFlagPresent() bool {
 	var present bool
-	flag.Visit(func(f *flag.Flag) {
+	flag.Visit(func(_ *flag.Flag) {
 		present = true
 	})
 	return present

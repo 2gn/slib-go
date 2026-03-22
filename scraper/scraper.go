@@ -1,3 +1,4 @@
+// Package scraper provides functions to scrape book information from the SIT library website.
 package scraper
 
 import (
@@ -17,12 +18,14 @@ var (
 	numRegex   = regexp.MustCompile(`^\d+\.\s*`)
 )
 
+// Scraper provides methods to fetch and parse book data.
 type Scraper struct {
 	BaseURL       string
 	OnlineBaseURL string
 	Campus        string // "Toyosu" or "Omiya"
 }
 
+// NewScraper creates and returns a new Scraper instance with default URLs.
 func NewScraper() *Scraper {
 	return &Scraper{
 		BaseURL:       "https://slib.shibaura-it.ac.jp/sublib/ja/nalis_sl/display_panel",
@@ -63,7 +66,7 @@ func (s *Scraper) GetDetail(bookURL string) (*models.BookDetail, error) {
 	detail.GoogleBooksURL, _ = doc.Find("#xc-search-full-left > a:nth-child(2)").Attr("href")
 	detail.ImageURL, _ = doc.Find("#xc-search-full-left img").Attr("src")
 
-	doc.Find(".mainTable dt").Each(func(i int, sel *goquery.Selection) {
+	doc.Find(".mainTable dt").Each(func(_ int, sel *goquery.Selection) {
 		label := strings.TrimSpace(sel.Text())
 		value := s.normalizeSpace(sel.Next().Text())
 
@@ -99,7 +102,10 @@ func (s *Scraper) GetDetail(bookURL string) (*models.BookDetail, error) {
 }
 
 func (s *Scraper) fetchHoldings(bibID string) ([]models.Holding, error) {
-	ajaxURL := fmt.Sprintf("https://library.shibaura-it.ac.jp/opc/xc_search/ajax/ncip_info_full?provider_id=1&bib_ids=%s", bibID)
+	ajaxURL := fmt.Sprintf(
+		"https://library.shibaura-it.ac.jp/opc/xc_search/ajax/ncip_info_full?provider_id=1&bib_ids=%s",
+		bibID,
+	)
 
 	resp, err := http.Get(ajaxURL)
 	if err != nil {
@@ -245,7 +251,7 @@ func (s *Scraper) fetchAndParse(url string, isOnline bool) ([]models.Book, error
 func (s *Scraper) parse(doc *goquery.Document, isOnline bool) []models.Book {
 	var books []models.Book
 
-	doc.Find("li.d-flex.align-items-center.mt-2.border.rounded.p-2").Each(func(i int, selection *goquery.Selection) {
+	doc.Find("li.d-flex.align-items-center.mt-2.border.rounded.p-2").Each(func(_ int, selection *goquery.Selection) {
 		book := models.Book{IsOnline: isOnline}
 
 		spanMe3 := selection.Find("span.me-3")

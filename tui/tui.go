@@ -1,10 +1,11 @@
+// Package tui provides a terminal user interface for the SIT search scraper.
 package tui
 
 import (
 	"fmt"
 	"image"
-	_ "image/jpeg"
-	_ "image/png"
+	_ "image/jpeg" // Register JPEG format
+	_ "image/png"  // Register PNG format
 	"net/http"
 
 	"github.com/2gn/slib-go/models"
@@ -32,7 +33,8 @@ type model struct {
 	image         string
 }
 
-func NewModel(s *scraper.Scraper) model {
+// NewModel creates and returns a new TUI model.
+func NewModel(s *scraper.Scraper) tea.Model {
 	ti := textinput.New()
 	ti.Placeholder = "Search query..."
 	ti.Focus()
@@ -221,32 +223,36 @@ func (m model) View() string {
 	s := "SIT Search TUI\n\n"
 	s += m.textInput.View() + "\n\n"
 
-	if m.searching {
+	switch {
+	case m.searching:
 		s += "Searching...\n"
-	} else if m.err != nil {
+	case m.err != nil:
 		s += fmt.Sprintf("Error: %v\n", m.err)
-	} else {
+	default:
 		s += baseStyle.Render(m.table.View()) + "\n"
 	}
 
 	s += "\n(enter: search/details, /: focus input, q: quit)\n"
 
-	if m.loadingDetail {
+	switch {
+	case m.loadingDetail:
 		s += "\nLoading book details...\n"
-	} else if m.detail != nil {
+	case m.detail != nil:
 		d := m.detail
-		detailText := fmt.Sprintf("\n--- Details ---\nTitle: %s\nAuthor: %s\nPublication: %s\nISBN: %s\nFormat: %s\n",
+		detailText := fmt.Sprintf("--- Details ---\nTitle: %s\nAuthor: %s\nPublication: %s\nISBN: %s\nFormat: %s\n",
 			d.Title, d.Author, d.Publication, d.ISBN, d.Format)
 
 		if d.GoogleBooksURL != "" {
 			detailText += fmt.Sprintf("Google Books: %s\n", d.GoogleBooksURL)
 		}
 
-		if m.image != "" {
-			s += "\n" + m.image + "\n"
-		}
+		details := lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render(detailText)
 
-		s += lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render(detailText)
+		if m.image != "" {
+			s += "\n" + lipgloss.JoinHorizontal(lipgloss.Top, m.image, "  ", details) + "\n"
+		} else {
+			s += "\n" + details + "\n"
+		}
 
 		if len(d.Holdings) > 0 {
 			s += lipgloss.NewStyle().Foreground(lipgloss.Color("241")).Render("\n--- Holdings ---\n")
@@ -255,7 +261,7 @@ func (m model) View() string {
 					fmt.Sprintf("%s | %s | %s\n", h.Location, h.CallNo, h.Status))
 			}
 		}
-	} else if len(m.books) > 0 && !m.searching {
+	case len(m.books) > 0 && !m.searching:
 		curr := m.table.Cursor()
 		if curr >= 0 && curr < len(m.books) {
 			b := m.books[curr]
@@ -267,6 +273,7 @@ func (m model) View() string {
 	return s
 }
 
+// StartTUI starts the terminal user interface.
 func StartTUI(s *scraper.Scraper) error {
 	p := tea.NewProgram(NewModel(s))
 	if _, err := p.Run(); err != nil {

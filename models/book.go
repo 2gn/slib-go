@@ -1,5 +1,7 @@
+// Package models defines the data structures used by the SIT search scraper.
 package models
 
+// Book represents a book item in the search results.
 type Book struct {
 	Title    string `json:"title"`
 	Author   string `json:"author"`
@@ -8,6 +10,7 @@ type Book struct {
 	IsOnline bool   `json:"is_online"`
 }
 
+// BookDetail represents the detailed information about a specific book.
 type BookDetail struct {
 	Title          string    `json:"title"`
 	Format         string    `json:"format"`
@@ -22,6 +25,7 @@ type BookDetail struct {
 	Holdings       []Holding `json:"holdings"`
 }
 
+// Holding represents the physical location and status of a book in the library.
 type Holding struct {
 	Location string `json:"location"`
 	Status   string `json:"status"`
