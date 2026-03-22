@@ -260,28 +260,57 @@ func (m model) View() string {
 	case m.detail != nil:
 		d := m.detail
 
-		// Combined Table
-		rows := [][]string{
-			{"Title", d.Title, ""},
-			{"Author", d.Author, ""},
-			{"Publication", d.Publication, ""},
-			{"ISBN", d.ISBN, ""},
-			{"Format", d.Format, ""},
-		}
-		if d.GoogleBooksURL != "" {
-			rows = append(rows, []string{"Google Books", d.GoogleBooksURL, ""})
+		// Combined Transposed Table
+		numCols := 1 + len(d.Holdings)
+		if numCols < 2 {
+			numCols = 2 // At least Labels + Data
 		}
 
+		// Field labels
+		fields := []string{"Title", "Author", "Publication", "ISBN", "Format"}
+		if d.GoogleBooksURL != "" {
+			fields = append(fields, "Google Books")
+		}
+
+		rows := [][]string{}
+		// General Detail rows
+		for _, f := range fields {
+			row := make([]string, numCols)
+			row[0] = f
+			switch f {
+			case "Title":
+				row[1] = d.Title
+			case "Author":
+				row[1] = d.Author
+			case "Publication":
+				row[1] = d.Publication
+			case "ISBN":
+				row[1] = d.ISBN
+			case "Format":
+				row[1] = d.Format
+			case "Google Books":
+				row[1] = d.GoogleBooksURL
+			}
+			rows = append(rows, row)
+		}
+
+		// Transposed Holdings rows
 		if len(d.Holdings) > 0 {
-			// Add a separator/header row for holdings
-			rows = append(rows, []string{"---", "---", "---"})
-			rows = append(rows, []string{"Location", "Call No", "Status"})
-			for _, h := range d.Holdings {
-				rows = append(rows, []string{
-					h.Location,
-					h.CallNo,
-					m.colorizeStatus(h.Status),
-				})
+			holdingFields := []string{"Location", "Call No", "Status"}
+			for _, f := range holdingFields {
+				row := make([]string, numCols)
+				row[0] = f
+				for i, h := range d.Holdings {
+					switch f {
+					case "Location":
+						row[i+1] = h.Location
+					case "Call No":
+						row[i+1] = h.CallNo
+					case "Status":
+						row[i+1] = m.colorizeStatus(h.Status)
+					}
+				}
+				rows = append(rows, row)
 			}
 		}
 
