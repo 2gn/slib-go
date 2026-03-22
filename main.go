@@ -12,8 +12,7 @@ import (
 	"github.com/2gn/slib-go/models"
 	"github.com/2gn/slib-go/scraper"
 	"github.com/2gn/slib-go/tui"
-	"github.com/charmbracelet/lipgloss"
-	lTable "github.com/charmbracelet/lipgloss/table"
+	"github.com/2gn/slib-go/ui"
 )
 
 func main() {
@@ -64,43 +63,7 @@ func main() {
 			return
 		}
 
-		rows := [][]string{
-			{"Title", detail.Title},
-			{"Author", detail.Author},
-			{"Publication", detail.Publication},
-			{"Format", detail.Format},
-			{"ISBN", detail.ISBN},
-			{"Bib ID", detail.BibID},
-		}
-		if detail.GoogleBooksURL != "" {
-			rows = append(rows, []string{"Google Books", detail.GoogleBooksURL})
-		}
-
-		dt := lTable.New().
-			Border(lipgloss.NormalBorder()).
-			BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
-			Rows(rows...)
-
-		fmt.Println(dt.Render())
-
-		if len(detail.Holdings) > 0 {
-			holdingRows := [][]string{}
-			for _, h := range detail.Holdings {
-				holdingRows = append(holdingRows, []string{
-					h.Location,
-					h.CallNo,
-					colorizeStatus(h.Status),
-				})
-			}
-
-			ht := lTable.New().
-				Border(lipgloss.NormalBorder()).
-				BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
-				Headers("Location", "Call No", "Status").
-				Rows(holdingRows...)
-
-			fmt.Println(ht.Render())
-		}
+		fmt.Println(ui.RenderDetailTable(detail))
 		return
 	}
 
@@ -187,17 +150,4 @@ func isAnyFlagPresent() bool {
 		present = true
 	})
 	return present
-}
-
-func colorizeStatus(status string) string {
-	switch {
-	case strings.Contains(status, "貸出中"): // On Loan
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("204")).Render("🕒 " + status)
-	case strings.Contains(status, "利用可能"), strings.Contains(status, "在架"): // Available / On Shelf
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Render("✅ " + status)
-	case strings.Contains(status, "予約中"): // Reserved
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render("🔖 " + status)
-	default:
-		return status
-	}
 }

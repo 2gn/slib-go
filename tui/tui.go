@@ -7,15 +7,14 @@ import (
 	_ "image/jpeg" // Register JPEG format
 	_ "image/png"  // Register PNG format
 	"net/http"
-	"strings"
 
 	"github.com/2gn/slib-go/models"
 	"github.com/2gn/slib-go/scraper"
+	"github.com/2gn/slib-go/ui"
 	"github.com/charmbracelet/bubbles/table"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	lTable "github.com/charmbracelet/lipgloss/table"
 	"github.com/qeesung/image2ascii/convert"
 )
 
@@ -226,19 +225,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tCmd
 }
 
-func (m model) colorizeStatus(status string) string {
-	switch {
-	case strings.Contains(status, "貸出中"): // On Loan
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("204")).Render("🕒 " + status)
-	case strings.Contains(status, "利用可能"), strings.Contains(status, "在架"): // Available / On Shelf
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("86")).Render("✅ " + status)
-	case strings.Contains(status, "予約中"): // Reserved
-		return lipgloss.NewStyle().Foreground(lipgloss.Color("214")).Render("🔖 " + status)
-	default:
-		return status
-	}
-}
-
 func (m model) View() string {
 	s := "SIT Search TUI\n\n"
 	s += m.textInput.View() + "\n\n"
@@ -258,68 +244,7 @@ func (m model) View() string {
 	case m.loadingDetail:
 		s += "\nLoading book details...\n"
 	case m.detail != nil:
-		d := m.detail
-
-		// Combined Transposed Table
-		numCols := 1 + len(d.Holdings)
-		if numCols < 2 {
-			numCols = 2 // At least Labels + Data
-		}
-
-		// Field labels
-		fields := []string{"Title", "Author", "Publication", "ISBN", "Format"}
-		if d.GoogleBooksURL != "" {
-			fields = append(fields, "Google Books")
-		}
-
-		rows := [][]string{}
-		// General Detail rows
-		for _, f := range fields {
-			row := make([]string, numCols)
-			row[0] = f
-			switch f {
-			case "Title":
-				row[1] = d.Title
-			case "Author":
-				row[1] = d.Author
-			case "Publication":
-				row[1] = d.Publication
-			case "ISBN":
-				row[1] = d.ISBN
-			case "Format":
-				row[1] = d.Format
-			case "Google Books":
-				row[1] = d.GoogleBooksURL
-			}
-			rows = append(rows, row)
-		}
-
-		// Transposed Holdings rows
-		if len(d.Holdings) > 0 {
-			holdingFields := []string{"Location", "Call No", "Status"}
-			for _, f := range holdingFields {
-				row := make([]string, numCols)
-				row[0] = f
-				for i, h := range d.Holdings {
-					switch f {
-					case "Location":
-						row[i+1] = h.Location
-					case "Call No":
-						row[i+1] = h.CallNo
-					case "Status":
-						row[i+1] = m.colorizeStatus(h.Status)
-					}
-				}
-				rows = append(rows, row)
-			}
-		}
-
-		t := lTable.New().
-			Border(lipgloss.NormalBorder()).
-			BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
-			Rows(rows...)
-
-		tableRendered := t.Render()
+		tableRendered := ui.RenderDetailTable(m.detail)
 
 		if m.image != "" {
 			s += "\n" + lipgloss.JoinHorizontal(lipgloss.Top, m.image, "  ", tableRendered) + "\n"
